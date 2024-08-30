@@ -1,21 +1,48 @@
+{-# LANGUAGE BinaryLiterals #-}
+
 module Des 
   ( ip
   , ipInv 
   , e 
-  , s )
+  , s 
+  , f )
   where
 
-import MyBits(testBit, setBit)
+import MyBits(testBit64, setBit64, testBit32, setBit32)
+import Data.Bits((.^.), (.&.), (.>>.), (.<<.), (.|.))
 import Data.Word(Word64, Word32, Word8)
 import Data.Array
 
 
-ipHelp :: [Int] -> Int -> Word64 -> Word64 -> Word64
-ipHelp [] _ block _ = block
-ipHelp (x:xs) destBit block initBlock = ipHelp xs (destBit+1) newBlock initBlock
+-- The functions 'permFromList64' and 'permFromList32' are used to do permutation of bits
+-- inside a block (64 or 32 bits wide). To do so, a table/list of indexes is passed and
+-- each bit of the block is set to the value of the corresponding bit index (from the 
+-- same block).
+-- 
+-- Lets say that we have the following block: 1010, same as bits[1,0,1,0] (first index = 1)
+-- The following list: [2,3]
+-- The output would be: 0100 = [bits[2],bits[3],0,0]
+--
+-- The parameters are the following:
+--  - Table/List of permutation indexes.
+--  - Index of the bit to change.
+--  - A block (accumulator of all permutations).
+--  - The initial input block (constant).
+--
+permFromList64 :: [Int] -> Int -> Word64 -> Word64 -> Word64
+permFromList64 [] _ block _ = block
+permFromList64 (x:xs) destBit block initBlock = permFromList64 xs (destBit+1) newBlock initBlock
   where 
-    newBlock = if testBit initBlock x then 
-      setBit block destBit
+    newBlock = if testBit64 initBlock x then 
+      setBit64 block destBit
+    else block
+
+permFromList32 :: [Int] -> Int -> Word32 -> Word32 -> Word32
+permFromList32 [] _ block _ = block
+permFromList32 (x:xs) destBit block initBlock = permFromList32 xs (destBit+1) newBlock initBlock
+  where 
+    newBlock = if testBit32 initBlock x then 
+      setBit32 block destBit
     else block
 
 
@@ -32,8 +59,13 @@ ipIndexes = -- IP bit indexes order
 
 
 -- Initial Permutation (IP)
+-- Takes a 64 bit block and does the permutation of bits given by the
+-- permutation table 'ipIndexes'. The result is another 64 bit block.
+--
+-- See page 10 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+--
 ip :: Word64 -> Word64
-ip = ipHelp ipIndexes 0 0 
+ip = permFromList64 ipIndexes 0 0 
 
 
 ipInvIndexes :: [Int]
@@ -49,8 +81,14 @@ ipInvIndexes = -- IP^-1 bit indexes
 
 
 -- Initial Permutation Inverse (IP^-1)
+-- Takes a 64 bit block and does the permutation of bits given by the
+-- permutation table 'ipInvIndexes', which is the inverse of 'ipIndexes'.
+-- The result is another 64 bit block.
+--
+-- See page 10 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+--
 ipInv :: Word64 -> Word64
-ipInv = ipHelp ipInvIndexes 0 0
+ipInv = permFromList64 ipInvIndexes 0 0
 
 
 eIndexes :: [Int]
@@ -65,10 +103,14 @@ eIndexes = -- E bit selection
     27, 28, 29, 30, 31, 00 ]
 
 
--- Takes a 32 bit block and yields a block 
--- of 48 bits (as a 64 bit padded block)
+-- Takes a 32 bit block and yields a block of 48 bits (as a 64 bit padded block).
+-- To do so, applies the permutation given by the table 'eIndexes'.
+--
+-- See page 13 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+--
 e :: Word32 -> Word64 
-e block = ipHelp eIndexes 0 0 (fromIntegral block :: Word64)
+e block = permFromList64 eIndexes 0 0 paddedBlock
+  where paddedBlock = (fromIntegral block :: Word64) .<<. 32
 
 
 sRow :: [Int]
@@ -126,18 +168,66 @@ sTables = array (1,8) [
       (3, array (0,15) [(i,j) | i <- sRow, j <- [02, 01, 14, 07, 04, 10, 08, 13, 15, 12, 09, 00, 03, 05, 06, 11]])])]
 
 
-s' :: Word64 -> Int -> Word64 -> Word32
-s' 0x3f _ block = fromIntegral block :: Word32
-s' mask it block = 01
-
-s :: Word64 -> Word32 
-s = s' 0 0xfc0000000000
-
-
--- mask: 0b111111000000....
--- parar cuando mask == 0b111111
+-- Calculates the S(it, i, j) functions to each group of 6 bits from a 
+-- 48-bit wide block (result from the 'e' function). Returns 
+-- a 32-bit wide block with the result of each Si function.
 --
--- B = (mask & bloque) >> (48 - (6 + it))
--- row = (0x000001 & B) | ((0x100000 & B) >> 5)
--- col = (0x011110 & B) >> 1
--- result = ((sTables ! it) ! row) ! col
+-- See page 14 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+-- 
+-- Params:
+--  - Initial input block (48-bit block padded as a 64-bit block). Will be constant.
+--  - Bit mask. Masks 6 bits of the Initial input block. The resultant 6 bits will help to obtain S(it, i, j) 
+--  - Iteration number. Describes which S function we have to apply.
+--  - Resultant block. 
+--
+s :: Word64 -> Word64 -> Int -> Word32 -> Word32
+s _ _ 9 block = block
+s initBlock mask it block = s initBlock (mask .>>. 6) (it+1) (block .|. sres)
+  where 
+    -- Apply mask to the block: get 6 bits
+    b = (mask .&. initBlock) .>>. (48 - (6 * it))
+    row = (0b000001 .&. b) .|. ((0b100000 .&. b) .>>. 5) 
+    col = (0b011110 .&. b) .>>. 1
+    sij = ((sTables ! it) ! (fromIntegral row :: Int)) ! (fromIntegral col :: Int)
+    sres = (fromIntegral sij :: Word32) .<<. (32 - (4 * it))
+
+
+-- Permutation 'P'
+-- indexes.
+pIndexes :: [Int]
+pIndexes = [
+  15, 06, 19, 20,
+  28, 11, 27, 16,
+  00, 14, 22, 25,
+  04, 17, 30, 09,
+  01, 07, 23, 13,
+  31, 26, 02, 08,
+  18, 12, 29, 05,
+  21, 10, 03, 24 ]
+
+
+-- Takes a 32 bit block and yields another permuted block of 32 bits.
+-- To do so, applies the permutation given by the table 'pIndexes'.
+--
+-- See page 15 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+--
+p :: Word32 -> Word32
+p = permFromList32 pIndexes 0 0
+
+
+-- The 'f' function is described as the most complex function of the DES algorithm.
+-- The procedure of this function is the following:
+--
+--  - Takes a 32 bits block (R) and a round key (K). 
+--  - Applies the permutation 'E' to the block, obtaining a brand-new 48 bits block.
+--  - The result is XORed with the 48 bits wide round key (K).
+--  - The result of the last separation is passed to the 's' function, obtaining a 32 bits block.
+--  - Finally, we apply the permutation 'P' to the last block.
+--
+--  See page 13 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
+--
+f :: Word32 -> Word64 -> Word32
+f block key = p  $ s postXor 0xfc0000000000 1 0
+  where
+    -- E(R) XOR RoundKey -> Get only 48 bits
+    postXor = (e block .^. key) .&. 0xffffffffffff
