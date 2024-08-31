@@ -5,6 +5,7 @@ module Des
   , ipInv 
   , e 
   , s 
+  , p
   , f )
   where
 
@@ -221,13 +222,11 @@ p = permFromList32 pIndexes 0 0
 --  - Takes a 32 bits block (R) and a round key (K). 
 --  - Applies the permutation 'E' to the block, obtaining a brand-new 48 bits block.
 --  - The result is XORed with the 48 bits wide round key (K).
---  - The result of the last separation is passed to the 's' function, obtaining a 32 bits block.
+--  - The result of the last operation is passed to the 's' function, obtaining a 32 bit block.
 --  - Finally, we apply the permutation 'P' to the last block.
 --
+--  As always in this implementation, blocks of 48 bits are stored padded in a 64 bit block.
 --  See page 13 of https://csrc.nist.gov/files/pubs/fips/46-3/final/docs/fips46-3.pdf
 --
 f :: Word32 -> Word64 -> Word32
-f block key = p  $ s postXor 0xfc0000000000 1 0
-  where
-    -- E(R) XOR RoundKey -> Get only 48 bits
-    postXor = (e block .^. key) .&. 0xffffffffffff
+f block key = p $ s (e block .^. key) 0xfc00000000000000 1 0
