@@ -5,6 +5,7 @@ import Test.Hspec
 import Data.Word
 import Des.Internal
 import Des.Bits
+import qualified Des
 
 
 ipInput :: Word64  -- Initial permutation Input
@@ -17,8 +18,14 @@ ipInvInput = 0b0000101001001100110110011001010101000011010000100011001000110100
 ipInvOutput :: Word64 --Initial permutation inverse Output
 ipInvOutput = 0b1000010111101000000100110101010000001111000010101011010000000101
 
-lrOutput :: (Word32, Word32) -- Separate a block in 2 parts
+
+lrInput :: Word64            -- Block to split into L,R 
+lrInput = 0b1100110000000000110011001111111111110000101010101111000010101010
+lrOutput :: (Word32, Word32) -- L and R separated
 lrOutput = (0b11001100000000001100110011111111, 0b11110000101010101111000010101010)
+l :: Word32
+r :: Word32
+(l,r) = lrOutput -- L AN R
 
 
 eInput :: Word32  -- E function Input 
@@ -82,6 +89,14 @@ ksOutputD :: Word32
 ksOutputD = 0b10101010110011001111000111100000
 
 
+desInputBlock :: Word64
+desInputBlock = 0b0000000100100011010001010110011110001001101010111100110111101111
+desInputKey :: Word64
+desInputKey = 0b0001001100110100010101110111100110011011101111001101111111110001
+desOutput :: Word64
+desOutput = 0b1000010111101000000100110101010000001111000010101011010000000101
+
+
 main :: IO () 
 main = hspec $ do
   describe "test DES functions" $ do 
@@ -92,7 +107,10 @@ main = hspec $ do
       Des.Internal.ipInv ipInvInput `shouldBe` ipInvOutput
 
     it "Test Decompose a block into 'L' and 'R'." $ do 
-      Des.Bits.getLR ipOutput `shouldBe` lrOutput
+      Des.Bits.splitLR lrInput `shouldBe` lrOutput
+
+    it "Test Compose a block from 'L' and 'R'." $ do 
+      Des.Bits.joinLR l r `shouldBe` lrInput
 
     it "Test 'E' permutation." $ do 
       Des.Internal.e eInput `shouldBe` eOutput
@@ -120,3 +138,9 @@ main = hspec $ do
 
     it "Test Key Shedule (KS) function." $ do 
       Des.Internal.ks ksInputC ksInputD ksInputIter `shouldBe` (ksOutputKey, ksOutputC, ksOutputD)
+
+    it "Test DES encryption [1/2]." $ do 
+      Des.encrypt desInputBlock desInputKey `shouldBe` desOutput
+
+    it "Test DES encryption [2/2]." $ do 
+      Des.encrypt 0x8787878787878787 0x0E329232EA6D0D73 `shouldBe` 0x0

@@ -155,11 +155,11 @@ cdShifts :: Array Int Int -- Iteration shifts of C & D from Key Schedule
 cdShifts = array (1,16) $ zip [1..16] [1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1]
 
 
--- The functions 'permFromList64' and 'permFromList32' are used to do 
--- permutation of bits inside a block (64 or 32 bits wide). To do so, a 
--- table/list of indexes is passed and each bit of the block is set to the 
--- value of the corresponding bit index (from the same block).
---
+--- The functions 'permFromList64' and 'permFromList32' are used to do 
+--- permutation of bits inside a block (64 or 32 bits wide). To do so, a 
+--- table/list of indexes is passed and each bit of the block is set to the 
+--- value of the corresponding bit index (from the same block).
+---
 permFromList64 :: [Int] -> Int -> Word64 -> Word64 -> Word64
 permFromList64 [] _ block _ = block
 permFromList64 (x:xs) destBit block initBlock = permFromList64 xs (destBit+1) newBlock initBlock
@@ -178,34 +178,33 @@ permFromList32 (x:xs) destBit block initBlock = permFromList32 xs (destBit+1) ne
 
 
 --- ``Initial Permutation (IP)``
---- Takes a 64 bit block and does the permutation of bits given by the
---- permutation table 'ipIndexes'. The result is another 64 bit block.
+--- Takes a 64 bits block and does the permutation of bits given by the
+--- permutation table 'ipIndexes'. The result is another 64 bits block.
 ---
 ip :: Word64 -> Word64
 ip = permFromList64 ipIndexes 0 0 
 
 
 --- ``Initial Permutation Inverse (IP^-1)``
---- Takes a 64 bit block and does the permutation of bits given by the
---- permutation table 'ipInvIndexes'. The result is another 64 bit block.
+--- Takes a 64 bits block and does the permutation of bits given by the
+--- permutation table 'ipInvIndexes'. The result is another 64 bits block.
 ---
 ipInv :: Word64 -> Word64
 ipInv = permFromList64 ipInvIndexes 0 0
 
 
 --- ``E function``
---- Takes a 32 bit block and yields a block of 48 bits (as a 64 bit padded block).
---- To do so, applies the permutation given by the table 'eIndexes'. Is part of
---- the 'f' function.
---
+--- Takes a 32 bits block and yields a block of 48 bits (as a 64 bits padded block).
+--- To do so, applies the permutation given by the table 'eIndexes'. 
+---
 e :: Word32 -> Word64 
 e block = permFromList64 eIndexes 0 0 paddedBlock
   where paddedBlock = (fromIntegral block :: Word64) .<<. 32
 
 
 --- Calculates the S(it, i, j) functions to each group of 6 bits from a 
---- 48-bit wide block (result from the 'e' function). Returns 
---- a 32-bit wide block with the result of each `S`iter function.
+--- 48 bits wide block (result from the 'e' function). Returns 
+--- a 32 bits wide block with the result of each `S`iter function.
 ---
 s :: Word64 -> Word64 -> Int -> Word32 -> Word32
 s _ _ 9 block = block
@@ -220,7 +219,7 @@ s initBlock mask iter block = s initBlock (mask .>>. 6) (iter+1) (block .|. sres
 
 
 --- ``P function``
---- The permutation function P yields a 32-bit output from a 32-bit input by
+--- The permutation function P yields a 32 bits output from a 32 bits input by
 --- permuting the bits of the input block. Such a function is defined by the 
 --- list/table `pIndexes`.
 ---
@@ -236,17 +235,17 @@ f :: Word32 -> Word64 -> Word32
 f block key = p $ s (e block .^. key) 0xfc00000000000000 1 0
 
 
---- Applies the PC-1 (Permuted Choice-1) permutation to a 64 bit block. This 
---- block will be a key and the output will be a 56 bit block padded as a 64 
---- bit block.
+--- Applies the PC-1 (Permuted Choice-1) permutation to a 64 bits block. This 
+--- block will be a key and the output will be a 56 bits block padded as a 64 
+--- bits block.
 ---
 permPC1 :: Word64 -> Word64
 permPC1 = permFromList64 pc1Indexes 0 0
 
 
---- Applies the PC-2 (Permuted Choice-2) permutation to a 58 bit block. This 
---- block will be a CnDn block and the output will be a 48 bit block padded as 
---- a 64 bit block (which will be a Key Kn).
+--- Applies the PC-2 (Permuted Choice-2) permutation to a 58 bits block. This 
+--- block will be a CnDn block and the output will be a 48 bits block padded as 
+--- a 64 bits block (which will be a Key Kn).
 ---
 permPC2 :: Word64 -> Word64
 permPC2 = permFromList64 pc2Indexes 0 0
