@@ -3,8 +3,8 @@
 module Main (main) where
 import Test.Hspec
 import Data.Word
-import Des
-import MyBits
+import Des.Internal
+import Des.Bits
 
 
 ipInput :: Word64  -- Initial permutation Input
@@ -67,6 +67,7 @@ pc2Input = 0b1110000110011001010101011111101010101100110011110001111000000000
 pc2Output :: Word64 -- PC-2 (Permuted Choice-2 output)
 pc2Output = 0b0001101100000010111011111111110001110000011100100000000000000000
 
+
 ksInputC :: Word32 -- Key Schedule input C block 
 ksInputC = 0b11110000110011001010101011110000
 ksInputD :: Word32 -- Key Schedule input D block
@@ -80,41 +81,42 @@ ksOutputC = 0b11100001100110010101010111110000
 ksOutputD :: Word32 
 ksOutputD = 0b10101010110011001111000111100000
 
+
 main :: IO () 
 main = hspec $ do
   describe "test DES functions" $ do 
     it "Test Initial Permutation (IP)." $ do 
-      Des.ip ipInput `shouldBe` ipOutput
+      Des.Internal.ip ipInput `shouldBe` ipOutput
 
     it "Test Initial Permutation Inverse (IP-1)." $ do 
-      Des.ipInv ipInvInput `shouldBe` ipInvOutput
+      Des.Internal.ipInv ipInvInput `shouldBe` ipInvOutput
 
     it "Test Decompose a block into 'L' and 'R'." $ do 
-      MyBits.getLR ipOutput `shouldBe` lrOutput
+      Des.Bits.getLR ipOutput `shouldBe` lrOutput
 
     it "Test 'E' permutation." $ do 
-      Des.e eInput `shouldBe` eOutput
+      Des.Internal.e eInput `shouldBe` eOutput
 
     it "Test 'S' functions." $ do 
-      Des.s sInput 0xfc00000000000000 1 0 `shouldBe` sOutput
+      Des.Internal.s sInput 0xfc00000000000000 1 0 `shouldBe` sOutput
 
     it "Test 'P' permutation." $ do 
-      Des.p pInput `shouldBe` pOutput
+      Des.Internal.p pInput `shouldBe` pOutput
 
     it "Test 'f' function." $ do 
-      Des.f fInputBlock fInputKey `shouldBe` fOutput
+      Des.Internal.f fInputBlock fInputKey `shouldBe` fOutput
 
     it "Test PC-1 (Permuted Choice-1)." $ do
-      Des.permPC1 pc1Input `shouldBe` pc1Output
+      Des.Internal.permPC1 pc1Input `shouldBe` pc1Output
 
     it "Test Decompose key block into 'C' and 'D'." $ do 
-      Des.splitCD cdInput `shouldBe` cdOutput
+      Des.Bits.splitCD cdInput `shouldBe` cdOutput
 
     it "Test Compose key block from 'C' and 'D'." $ do 
-      Des.joinCD c d `shouldBe` cdInput
+      Des.Bits.joinCD c d `shouldBe` cdInput
 
     it "Test PC-2 (Permuted Choice-2)." $ do 
-      Des.permPC2 pc2Input `shouldBe` pc2Output
+      Des.Internal.permPC2 pc2Input `shouldBe` pc2Output
 
     it "Test Key Shedule (KS) function." $ do 
-      Des.ks ksInputC ksInputD ksInputIter `shouldBe` (ksOutputKey, ksOutputC, ksOutputD)
+      Des.Internal.ks ksInputC ksInputD ksInputIter `shouldBe` (ksOutputKey, ksOutputC, ksOutputD)
